@@ -1,6 +1,6 @@
 import "leaflet/dist/leaflet.css";
 import "./style.css";
-import leaflet from "leaflet";
+import leaflet, { LatLng } from "leaflet";
 import luck from "./luck";
 import "./leafletWorkaround";
 
@@ -9,7 +9,7 @@ const MERRILL_CLASSROOM = leaflet.latLng({
   lng: -122.0533,
 });
 
-const GAMEPLAY_ZOOM_LEVEL = 19;
+const GAMEPLAY_ZOOM_LEVEL = 18.5;
 const TILE_DEGREES = 1e-4;
 const NEIGHBORHOOD_SIZE = 8;
 const PIT_SPAWN_PROBABILITY = 0.1;
@@ -44,6 +44,8 @@ sensorButton.addEventListener("click", () => {
       leaflet.latLng(position.coords.latitude, position.coords.longitude)
     );
     map.setView(playerMarker.getLatLng());
+    const { latitude, longitude } = position.coords;
+    spawnPits(leaflet.latLng(latitude, longitude));
   });
 });
 
@@ -65,29 +67,73 @@ function makePit(i: number, j: number) {
 
   const pit = leaflet.rectangle(bounds) as leaflet.Layer;
 
-  pit.bindPopup(() => {
-    let value = Math.floor(luck([i, j, "initialValue"].toString()) * 100);
-    const container = document.createElement("div");
-    container.innerHTML = `
-                <div>There is a pit here at "${i},${j}". It has value <span id="value">${value}</span>.</div>
-                <button id="poke">poke</button>`;
-    const poke = container.querySelector<HTMLButtonElement>("#poke")!;
-    poke.addEventListener("click", () => {
-      value--;
-      container.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-        value.toString();
-      points++;
-      statusPanel.innerHTML = `${points} points accumulated`;
-    });
-    return container;
-  });
+  pit.bindPopup(createPopup(i, j));
   pit.addTo(map);
 }
 
-for (let i = -NEIGHBORHOOD_SIZE; i < NEIGHBORHOOD_SIZE; i++) {
-  for (let j = -NEIGHBORHOOD_SIZE; j < NEIGHBORHOOD_SIZE; j++) {
-    if (luck([i, j].toString()) < PIT_SPAWN_PROBABILITY) {
-      makePit(i, j);
+const pitData: Map<string, number> = new Map<string, number>();
+
+function getPitValue(pitKey: string) {
+  if (!pitData.has(pitKey)) {
+    // If the pit value is not in the lookup table, calculate and store it
+    const calculatedValue = Math.floor(luck([pitKey].toString()) * 100);
+    pitData.set(pitKey, calculatedValue);
+    return calculatedValue;
+  }
+  return pitData.get(pitKey)!;
+}
+
+function createPopup(i: number, j: number) {
+  let value = getPitValue(`${i},${j}`);
+  const container = document.createElement("div");
+  container.innerHTML = `
+            <div>There is a pit here at "${i},${j}". It has value <span id="value">${value}</span>.</div>
+            <button id="Take">Take coin</button><button id="Drop">Drop coin</button>`;
+  const take = container.querySelector<HTMLButtonElement>("#Take")!;
+  take.addEventListener("click", () => {
+    if (value == 0) {
+      return;
+    }
+    value--;
+    container.querySelector<HTMLSpanElement>("#value")!.innerHTML =
+      value.toString();
+    points++;
+    statusPanel.innerHTML = `${points} points accumulated`;
+  });
+  const drop = container.querySelector<HTMLButtonElement>("#Drop")!;
+  drop.addEventListener("click", () => {
+    if (points == 0) {
+      return;
+    }
+    value++;
+    container.querySelector<HTMLSpanElement>("#value")!.innerHTML =
+      value.toString();
+    points--;
+    statusPanel.innerHTML = `${points} points accumulated`;
+  });
+  return container;
+}
+
+spawnPits(MERRILL_CLASSROOM);
+function spawnPits(position: LatLng) {
+  const latitude = position.lat;
+  const longitude = position.lng;
+
+  const i = Math.floor((latitude - MERRILL_CLASSROOM.lat) / TILE_DEGREES);
+  const j = Math.floor((longitude - MERRILL_CLASSROOM.lng) / TILE_DEGREES);
+
+  for (let deltaI = -NEIGHBORHOOD_SIZE; deltaI < NEIGHBORHOOD_SIZE; deltaI++) {
+    for (
+      let deltaJ = -NEIGHBORHOOD_SIZE;
+      deltaJ < NEIGHBORHOOD_SIZE;
+      deltaJ++
+    ) {
+      const newI = i + deltaI;
+      const newJ = j + deltaJ;
+
+      if (luck([newI, newJ].toString()) < PIT_SPAWN_PROBABILITY) {
+        makePit(newI, newJ);
+      }
     }
   }
 }
