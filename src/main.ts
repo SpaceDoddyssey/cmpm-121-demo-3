@@ -95,53 +95,93 @@ function getPitStorage(i: number, j: number) {
 function createPopup(i: number, j: number) {
   const coins = getPitStorage(i, j);
   const container = document.createElement("div");
+  const plural = coins.length != 1 ? "s" : "";
   container.innerHTML = `
             <div>There is a cache here at "${i},${j}".
-            It has <span id="value">${coins.length}</span> coin${
-    coins.length != 1 ? "s" : ""
-  } in it.</div>
-            <button id="Drop">Leave a coin</button>`;
+            It has <span id="value">${coins.length}</span> coin${plural} in it.</div>
+            <button id="Leave">Leave a coin</button>`;
+
+  const leave = container.querySelector<HTMLButtonElement>("#Leave")!;
+  let showingInventory = false;
+  leave.addEventListener("click", () => {
+    if (showingInventory) {
+      return;
+    }
+    showingInventory = true;
+    const inventoryDiv = document.createElement("div");
+    inventoryDiv.innerHTML = `Coin Inventory:`;
+    for (const coin of inventory) {
+      const coinDiv = createInvCoinDiv(coin, i, j, container, coins);
+      inventoryDiv.append(coinDiv);
+    }
+    container.append(inventoryDiv);
+  });
 
   for (const coin of coins) {
-    const coinDiv = document.createElement("div");
-    coinDiv.innerHTML = `
-      Coin:${coin.i},${coin.j},${coin.index}
-      <button id="Take">Take coin</button>`;
-    const take = coinDiv.querySelector<HTMLButtonElement>("#Take")!;
-    take.addEventListener("click", () => {
-      inventory.push(coin);
-      coins.splice(coins.indexOf(coin), 1);
-      container.querySelector<HTMLSpanElement>(
-        "#value"
-      )!.innerHTML = `${coins.length}`;
-      statusPanel.innerHTML = `${inventory.length} points accumulated`;
-      coinDiv.remove();
-    });
+    const coinDiv = createPitCoinDiv(coin, i, j, container, coins);
     container.append(coinDiv);
   }
-  // const take = container.querySelector<HTMLButtonElement>("#Take")!;
-  // take.addEventListener("click", () => {
-  //   if (value == 0) {
-  //     return;
-  //   }
-  //   value--;
-  //   container.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-  //     value.toString();
-  //   points++;
-  //   statusPanel.innerHTML = `${points} points accumulated`;
-  // });
-  // const drop = container.querySelector<HTMLButtonElement>("#Drop")!;
-  // drop.addEventListener("click", () => {
-  //   if (points == 0) {
-  //     return;
-  //   }
-  //   value++;
-  //   container.querySelector<HTMLSpanElement>("#value")!.innerHTML =
-  //     value.toString();
-  //   points--;
-  //   statusPanel.innerHTML = `${points} points accumulated`;
-  // });
+
   return container;
+}
+
+function createPitCoinDiv(
+  coin: Coin,
+  i: number,
+  j: number,
+  container: HTMLDivElement,
+  coins: Coin[]
+) {
+  const coinDiv = document.createElement("div");
+  coinDiv.innerHTML = `
+    Coin:${coin.i},${coin.j},${coin.index}
+    <button id="Take">Take coin</button>`;
+  const take = coinDiv.querySelector<HTMLButtonElement>("#Take")!;
+  take.addEventListener("click", () => {
+    takeCoinFromPit(coin, i, j);
+    container.querySelector<HTMLSpanElement>(
+      "#value"
+    )!.innerHTML = `${coins.length}`;
+    statusPanel.innerHTML = `${inventory.length} points accumulated`;
+    coinDiv.remove();
+  });
+  return coinDiv;
+}
+
+function createInvCoinDiv(
+  coin: Coin,
+  i: number,
+  j: number,
+  container: HTMLDivElement,
+  coins: Coin[]
+) {
+  const coinDiv = document.createElement("div");
+  coinDiv.innerHTML = `
+    Coin:${coin.i},${coin.j},${coin.index}
+    <button id="Leave">Leave coin</button>`;
+  const leave = coinDiv.querySelector<HTMLButtonElement>("#Leave")!;
+  leave.addEventListener("click", () => {
+    addCoinToPit(coin, i, j);
+    container.querySelector<HTMLSpanElement>(
+      "#value"
+    )!.innerHTML = `${coins.length}`;
+    statusPanel.innerHTML = `${inventory.length} points accumulated`;
+    container.append(createPitCoinDiv(coin, i, j, container, coins));
+    coinDiv.remove();
+  });
+  return coinDiv;
+}
+
+function addCoinToPit(coin: Coin, i: number, j: number) {
+  const coins = getPitStorage(i, j);
+  coins.push(coin);
+  inventory.splice(inventory.indexOf(coin), 1);
+}
+
+function takeCoinFromPit(coin: Coin, i: number, j: number) {
+  const coins = getPitStorage(i, j);
+  inventory.push(coin);
+  coins.splice(inventory.indexOf(coin), 1);
 }
 
 spawnPits(NULL_ISLAND);
