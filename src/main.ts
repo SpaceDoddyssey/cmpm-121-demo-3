@@ -23,10 +23,10 @@ class Coin {
   }
 }
 
-const shownPits: string[] = [];
-
 const inventory: Coin[] = [];
 const pitData: Map<string, Coin[]> = new Map<string, Coin[]>();
+
+const shownPits: string[] = [];
 
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!;
 statusPanel.innerHTML = "No points yet...";
@@ -104,29 +104,51 @@ function createPopup(i: number, j: number) {
   const plural = coins.length != 1 ? "s" : "";
   container.innerHTML = `
             <div>There is a cache here at "${i},${j}".
-            It has <span id="value">${coins.length}</span> coin${plural} in it.</div>
-            <button id="Leave">Leave a coin</button>`;
+            It has <span id="value">${coins.length}</span> coin${plural} in it.</div>`;
 
-  const leave = container.querySelector<HTMLButtonElement>("#Leave")!;
-  let showingInventory = false;
-  leave.addEventListener("click", () => {
-    if (showingInventory) {
-      return;
-    }
-    showingInventory = true;
-    const inventoryDiv = document.createElement("div");
-    inventoryDiv.innerHTML = `Coin Inventory:`;
-    for (const coin of inventory) {
-      const coinDiv = createInvCoinDiv(coin, i, j, container, coins);
-      inventoryDiv.append(coinDiv);
-    }
-    container.append(inventoryDiv);
-  });
+  const pitCoinsDiv = document.createElement("div");
+  pitCoinsDiv.prepend(document.createElement("div"));
 
+  pitCoinsDiv.id = "pitCoinsDiv";
   for (const coin of coins) {
     const coinDiv = createPitCoinDiv(coin, i, j, container, coins);
-    container.append(coinDiv);
+    pitCoinsDiv.append(coinDiv);
   }
+  container.append(pitCoinsDiv);
+
+  const showInvButtonDiv = document.createElement("div");
+  showInvButtonDiv.innerHTML = `<button id="InventoryButton">Show my inventory</button>`;
+  const showInvButton =
+    showInvButtonDiv.querySelector<HTMLButtonElement>("#InventoryButton")!;
+  container.append(showInvButtonDiv);
+
+  let inventoryMade = false;
+  let inventoryShowing = false;
+  const inventoryDiv = document.createElement("div");
+  inventoryDiv.id = "Inventory";
+  showInvButton.addEventListener("click", () => {
+    if (!inventoryMade) {
+      inventoryMade = true;
+      inventoryShowing = true;
+      inventoryDiv.innerHTML = `Coin Inventory:`;
+      for (const coin of inventory) {
+        const coinDiv = createInvCoinDiv(coin, i, j, container, coins);
+        inventoryDiv.append(coinDiv);
+      }
+      showInvButtonDiv.append(inventoryDiv);
+      showInvButton.innerHTML = `Hide inventory`;
+      return;
+    }
+    if (inventoryShowing) {
+      inventoryShowing = false;
+      inventoryDiv.classList.add("hidden");
+      showInvButton.innerHTML = `Show my inventory`;
+    } else {
+      inventoryShowing = true;
+      inventoryDiv.classList.remove("hidden");
+      showInvButton.innerHTML = `Hide inventory`;
+    }
+  });
 
   return container;
 }
@@ -150,6 +172,10 @@ function createPitCoinDiv(
     )!.innerHTML = `${coins.length}`;
     statusPanel.innerHTML = `${inventory.length} points accumulated`;
     coinDiv.style.display = "none";
+    const invDiv = container.querySelector<HTMLDivElement>("#Inventory");
+    if (invDiv != null) {
+      invDiv.append(createInvCoinDiv(coin, i, j, container, coins));
+    }
   });
   return coinDiv;
 }
@@ -172,7 +198,9 @@ function createInvCoinDiv(
       "#value"
     )!.innerHTML = `${coins.length}`;
     statusPanel.innerHTML = `${inventory.length} points accumulated`;
-    container.append(createPitCoinDiv(coin, i, j, container, coins));
+    container
+      .querySelector<HTMLDivElement>("#pitCoinsDiv")!
+      .append(createPitCoinDiv(coin, i, j, container, coins));
     coinDiv.style.display = "none";
   });
   return coinDiv;
