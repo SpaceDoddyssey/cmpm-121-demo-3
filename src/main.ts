@@ -23,8 +23,13 @@ class Coin {
   }
 }
 
+const shownPits: string[] = [];
+
 const inventory: Coin[] = [];
 const pitData: Map<string, Coin[]> = new Map<string, Coin[]>();
+
+const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!;
+statusPanel.innerHTML = "No points yet...";
 
 const mapContainer = document.querySelector<HTMLElement>("#map")!;
 
@@ -61,11 +66,12 @@ sensorButton.addEventListener("click", () => {
   });
 });
 
-//let points = 0;
-const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!;
-statusPanel.innerHTML = "No points yet...";
-
 function makePit(i: number, j: number) {
+  if (shownPits.includes(`${i},${j}`)) {
+    return;
+  }
+  shownPits.push(`${i},${j}`);
+
   const bounds = leaflet.latLngBounds([
     [i * TILE_DEGREES, j * TILE_DEGREES],
     [(i + 1) * TILE_DEGREES, (j + 1) * TILE_DEGREES],
@@ -143,7 +149,7 @@ function createPitCoinDiv(
       "#value"
     )!.innerHTML = `${coins.length}`;
     statusPanel.innerHTML = `${inventory.length} points accumulated`;
-    coinDiv.remove();
+    coinDiv.style.display = "none";
   });
   return coinDiv;
 }
@@ -167,7 +173,7 @@ function createInvCoinDiv(
     )!.innerHTML = `${coins.length}`;
     statusPanel.innerHTML = `${inventory.length} points accumulated`;
     container.append(createPitCoinDiv(coin, i, j, container, coins));
-    coinDiv.remove();
+    coinDiv.style.display = "none";
   });
   return coinDiv;
 }
