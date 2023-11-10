@@ -11,6 +11,7 @@ const TILE_DEGREES = 1e-4;
 const NEIGHBORHOOD_SIZE = 8;
 const PIT_SPAWN_PROBABILITY = 0.1;
 const COIN_RATE_MOD = 100;
+const MOVE_STEP = 0.0005;
 
 class Coin {
   public i: number;
@@ -54,33 +55,40 @@ const playerMarker = leaflet.marker(NULL_ISLAND);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
+spawnPits(NULL_ISLAND);
+let curLat = 0;
+let curLng = 0;
+
 const sensorButton = document.querySelector("#sensor")!;
 sensorButton.addEventListener("click", () => {
   navigator.geolocation.watchPosition((position) => {
-    playerMarker.setLatLng(
-      leaflet.latLng(position.coords.latitude, position.coords.longitude)
-    );
-    map.setView(playerMarker.getLatLng());
-    const { latitude, longitude } = position.coords;
-    spawnPits(leaflet.latLng(latitude, longitude));
+    moveTo(position.coords.latitude, position.coords.longitude);
   });
 });
 
-function makePit(i: number, j: number) {
-  if (shownPits.includes(`${i},${j}`)) {
-    return;
-  }
-  shownPits.push(`${i},${j}`);
+document.querySelector("#north")!.addEventListener("click", () => {
+  moveTo(curLat + MOVE_STEP, curLng);
+});
+document.querySelector("#south")!.addEventListener("click", () => {
+  moveTo(curLat - MOVE_STEP, curLng);
+});
+document.querySelector("#east")!.addEventListener("click", () => {
+  moveTo(curLat, curLng + MOVE_STEP);
+});
+document.querySelector("#west")!.addEventListener("click", () => {
+  moveTo(curLat, curLng - MOVE_STEP);
+});
 
-  const bounds = leaflet.latLngBounds([
-    [i * TILE_DEGREES, j * TILE_DEGREES],
-    [(i + 1) * TILE_DEGREES, (j + 1) * TILE_DEGREES],
-  ]);
+///////////////
+// FUNCTIONS //
+///////////////
 
-  const pit = leaflet.rectangle(bounds) as leaflet.Layer;
-
-  pit.bindPopup(createPopup(i, j));
-  pit.addTo(map);
+function moveTo(lat: number, long: number) {
+  playerMarker.setLatLng(leaflet.latLng(lat, long));
+  map.setView(playerMarker.getLatLng());
+  spawnPits(leaflet.latLng(lat, long));
+  curLat = lat;
+  curLng = long;
 }
 
 function getPitStorage(i: number, j: number) {
@@ -218,7 +226,6 @@ function takeCoinFromPit(coin: Coin, i: number, j: number) {
   coins.splice(inventory.indexOf(coin), 1);
 }
 
-spawnPits(NULL_ISLAND);
 function spawnPits(position: LatLng) {
   const latitude = position.lat;
   const longitude = position.lng;
@@ -240,4 +247,21 @@ function spawnPits(position: LatLng) {
       }
     }
   }
+}
+
+function makePit(i: number, j: number) {
+  if (shownPits.includes(`${i},${j}`)) {
+    return;
+  }
+  shownPits.push(`${i},${j}`);
+
+  const bounds = leaflet.latLngBounds([
+    [i * TILE_DEGREES, j * TILE_DEGREES],
+    [(i + 1) * TILE_DEGREES, (j + 1) * TILE_DEGREES],
+  ]);
+
+  const pit = leaflet.rectangle(bounds) as leaflet.Layer;
+
+  pit.bindPopup(createPopup(i, j));
+  pit.addTo(map);
 }
