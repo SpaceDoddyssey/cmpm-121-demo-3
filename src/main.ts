@@ -25,9 +25,12 @@ class Coin {
 }
 
 const inventory: Coin[] = [];
-const cacheData: Map<string, Coin[]> = new Map<string, Coin[]>();
+const cacheData = new Map<string, Coin[]>();
 
-const shownCaches: string[] = [];
+const shownCaches = new Map<
+  string,
+  { rect: leaflet.Layer; i: number; j: number }
+>();
 
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!;
 statusPanel.innerHTML = "No points yet...";
@@ -86,23 +89,27 @@ document.querySelector("#west")!.addEventListener("click", () => {
 function moveTo(lat: number, long: number) {
   playerMarker.setLatLng(leaflet.latLng(lat, long));
   map.setView(playerMarker.getLatLng());
+  clearOutOfRangeCaches(leaflet.latLng(lat, long));
   spawnCaches(leaflet.latLng(lat, long));
   curLat = lat;
   curLng = long;
 }
 
 function getCacheStorage(i: number, j: number) {
+  console.log("Getting cache storage for ", i, ",", j);
   const cacheKey = `${i},${j}`;
   if (!cacheData.has(cacheKey)) {
     // If the cache value is not in the lookup table, calculate and store it
     const coins = [];
     const numCoins = Math.floor(luck([cacheKey].toString()) * COIN_RATE_MOD);
+    console.log("------generating ", numCoins, " coins");
     for (let index = 0; index < numCoins; index++) {
       coins.push(new Coin(i, j, index));
     }
     cacheData.set(cacheKey, coins);
     return coins;
   }
+  console.log("------cacheData found with ", cacheData.get(cacheKey)!.length);
   return cacheData.get(cacheKey)!;
 }
 
@@ -216,14 +223,43 @@ function createInvCoinDiv(
 
 function addCoinToCache(coin: Coin, i: number, j: number) {
   const coins = getCacheStorage(i, j);
+  console.log("adding to ", coins);
   coins.push(coin);
   inventory.splice(inventory.indexOf(coin), 1);
 }
 
 function takeCoinFromCache(coin: Coin, i: number, j: number) {
   const coins = getCacheStorage(i, j);
+  console.log("taking from ", coins);
   inventory.push(coin);
-  coins.splice(inventory.indexOf(coin), 1);
+  coins.splice(coins.indexOf(coin), 1);
+  console.log("Coins after:", coins);
+}
+
+function clearOutOfRangeCaches(position: LatLng) {
+  const latitude = position.lat;
+  const longitude = position.lng;
+
+  const i = Math.floor(latitude / TILE_DEGREES);
+  const j = Math.floor(longitude / TILE_DEGREES);
+
+  const keysToRemove: string[] = [];
+  for (const [key, value] of shownCaches) {
+    if (
+      value.i < i - NEIGHBORHOOD_SIZE ||
+      value.i > i + NEIGHBORHOOD_SIZE ||
+      value.j < j - NEIGHBORHOOD_SIZE ||
+      value.j > j + NEIGHBORHOOD_SIZE
+    ) {
+      value.rect.remove();
+      keysToRemove.push(key);
+    }
+  }
+
+  for (const key of keysToRemove) {
+    console.log("Deleting ", key);
+    shownCaches.delete(key);
+  }
 }
 
 function spawnCaches(position: LatLng) {
@@ -250,18 +286,22 @@ function spawnCaches(position: LatLng) {
 }
 
 function makeCache(i: number, j: number) {
-  if (shownCaches.includes(`${i},${j}`)) {
+  const cacheKey = `${i},${j}`;
+  if (shownCaches.has(cacheKey)) {
     return;
   }
-  shownCaches.push(`${i},${j}`);
+
+  console.log("Creating ", cacheKey);
 
   const bounds = leaflet.latLngBounds([
     [i * TILE_DEGREES, j * TILE_DEGREES],
     [(i + 1) * TILE_DEGREES, (j + 1) * TILE_DEGREES],
   ]);
 
-  const cache = leaflet.rectangle(bounds) as leaflet.Layer;
+  const cacheRect = leaflet.rectangle(bounds) as leaflet.Layer;
 
-  cache.bindPopup(createPopup(i, j));
-  cache.addTo(map);
+  cacheRect.bindPopup(createPopup(i, j));
+  shownCaches.set(cacheKey, { rect: cacheRect, i, j });
+
+  cacheRect.addTo(map);
 }
