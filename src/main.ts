@@ -11,7 +11,7 @@ const TILE_DEGREES = 1e-4;
 const NEIGHBORHOOD_SIZE = 8;
 const CACHE_SPAWN_PROBABILITY = 0.1;
 const COIN_RATE_MOD = 100;
-const MOVE_STEP = 0.0005;
+const MOVE_STEP = 0.0001;
 
 class Coin {
   public i: number;
