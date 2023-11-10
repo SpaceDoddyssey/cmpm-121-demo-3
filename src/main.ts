@@ -9,7 +9,7 @@ const NULL_ISLAND = leaflet.latLng(0, 0);
 const GAMEPLAY_ZOOM_LEVEL = 18.5;
 const TILE_DEGREES = 1e-4;
 const NEIGHBORHOOD_SIZE = 8;
-const PIT_SPAWN_PROBABILITY = 0.1;
+const CACHE_SPAWN_PROBABILITY = 0.1;
 const COIN_RATE_MOD = 100;
 const MOVE_STEP = 0.0005;
 
@@ -25,9 +25,9 @@ class Coin {
 }
 
 const inventory: Coin[] = [];
-const pitData: Map<string, Coin[]> = new Map<string, Coin[]>();
+const cacheData: Map<string, Coin[]> = new Map<string, Coin[]>();
 
-const shownPits: string[] = [];
+const shownCaches: string[] = [];
 
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!;
 statusPanel.innerHTML = "No points yet...";
@@ -55,7 +55,7 @@ const playerMarker = leaflet.marker(NULL_ISLAND);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
-spawnPits(NULL_ISLAND);
+spawnCaches(NULL_ISLAND);
 let curLat = 0;
 let curLng = 0;
 
@@ -86,43 +86,43 @@ document.querySelector("#west")!.addEventListener("click", () => {
 function moveTo(lat: number, long: number) {
   playerMarker.setLatLng(leaflet.latLng(lat, long));
   map.setView(playerMarker.getLatLng());
-  spawnPits(leaflet.latLng(lat, long));
+  spawnCaches(leaflet.latLng(lat, long));
   curLat = lat;
   curLng = long;
 }
 
-function getPitStorage(i: number, j: number) {
-  const pitKey = `${i},${j}`;
-  if (!pitData.has(pitKey)) {
-    // If the pit value is not in the lookup table, calculate and store it
+function getCacheStorage(i: number, j: number) {
+  const cacheKey = `${i},${j}`;
+  if (!cacheData.has(cacheKey)) {
+    // If the cache value is not in the lookup table, calculate and store it
     const coins = [];
-    const numCoins = Math.floor(luck([pitKey].toString()) * COIN_RATE_MOD);
+    const numCoins = Math.floor(luck([cacheKey].toString()) * COIN_RATE_MOD);
     for (let index = 0; index < numCoins; index++) {
       coins.push(new Coin(i, j, index));
     }
-    pitData.set(pitKey, coins);
+    cacheData.set(cacheKey, coins);
     return coins;
   }
-  return pitData.get(pitKey)!;
+  return cacheData.get(cacheKey)!;
 }
 
 function createPopup(i: number, j: number) {
-  const coins = getPitStorage(i, j);
+  const coins = getCacheStorage(i, j);
   const container = document.createElement("div");
   const plural = coins.length != 1 ? "s" : "";
   container.innerHTML = `
             <div>There is a cache here at "${i},${j}".
             It has <span id="value">${coins.length}</span> coin${plural} in it.</div>`;
 
-  const pitCoinsDiv = document.createElement("div");
-  pitCoinsDiv.prepend(document.createElement("div"));
+  const cacheCoinsDiv = document.createElement("div");
+  cacheCoinsDiv.prepend(document.createElement("div"));
 
-  pitCoinsDiv.id = "pitCoinsDiv";
+  cacheCoinsDiv.id = "cacheCoinsDiv";
   for (const coin of coins) {
-    const coinDiv = createPitCoinDiv(coin, i, j, container, coins);
-    pitCoinsDiv.append(coinDiv);
+    const coinDiv = createCacheCoinDiv(coin, i, j, container, coins);
+    cacheCoinsDiv.append(coinDiv);
   }
-  container.append(pitCoinsDiv);
+  container.append(cacheCoinsDiv);
 
   const showInvButtonDiv = document.createElement("div");
   showInvButtonDiv.innerHTML = `<button id="InventoryButton">Show my inventory</button>`;
@@ -161,7 +161,7 @@ function createPopup(i: number, j: number) {
   return container;
 }
 
-function createPitCoinDiv(
+function createCacheCoinDiv(
   coin: Coin,
   i: number,
   j: number,
@@ -174,7 +174,7 @@ function createPitCoinDiv(
     <button id="Take">Take coin</button>`;
   const take = coinDiv.querySelector<HTMLButtonElement>("#Take")!;
   take.addEventListener("click", () => {
-    takeCoinFromPit(coin, i, j);
+    takeCoinFromCache(coin, i, j);
     container.querySelector<HTMLSpanElement>(
       "#value"
     )!.innerHTML = `${coins.length}`;
@@ -201,32 +201,32 @@ function createInvCoinDiv(
     <button id="Leave">Leave coin</button>`;
   const leave = coinDiv.querySelector<HTMLButtonElement>("#Leave")!;
   leave.addEventListener("click", () => {
-    addCoinToPit(coin, i, j);
+    addCoinToCache(coin, i, j);
     container.querySelector<HTMLSpanElement>(
       "#value"
     )!.innerHTML = `${coins.length}`;
     statusPanel.innerHTML = `${inventory.length} points accumulated`;
     container
-      .querySelector<HTMLDivElement>("#pitCoinsDiv")!
-      .append(createPitCoinDiv(coin, i, j, container, coins));
+      .querySelector<HTMLDivElement>("#cacheCoinsDiv")!
+      .append(createCacheCoinDiv(coin, i, j, container, coins));
     coinDiv.style.display = "none";
   });
   return coinDiv;
 }
 
-function addCoinToPit(coin: Coin, i: number, j: number) {
-  const coins = getPitStorage(i, j);
+function addCoinToCache(coin: Coin, i: number, j: number) {
+  const coins = getCacheStorage(i, j);
   coins.push(coin);
   inventory.splice(inventory.indexOf(coin), 1);
 }
 
-function takeCoinFromPit(coin: Coin, i: number, j: number) {
-  const coins = getPitStorage(i, j);
+function takeCoinFromCache(coin: Coin, i: number, j: number) {
+  const coins = getCacheStorage(i, j);
   inventory.push(coin);
   coins.splice(inventory.indexOf(coin), 1);
 }
 
-function spawnPits(position: LatLng) {
+function spawnCaches(position: LatLng) {
   const latitude = position.lat;
   const longitude = position.lng;
 
@@ -242,26 +242,26 @@ function spawnPits(position: LatLng) {
       const newI = i + deltaI;
       const newJ = j + deltaJ;
 
-      if (luck([newI, newJ].toString()) < PIT_SPAWN_PROBABILITY) {
-        makePit(newI, newJ);
+      if (luck([newI, newJ].toString()) < CACHE_SPAWN_PROBABILITY) {
+        makeCache(newI, newJ);
       }
     }
   }
 }
 
-function makePit(i: number, j: number) {
-  if (shownPits.includes(`${i},${j}`)) {
+function makeCache(i: number, j: number) {
+  if (shownCaches.includes(`${i},${j}`)) {
     return;
   }
-  shownPits.push(`${i},${j}`);
+  shownCaches.push(`${i},${j}`);
 
   const bounds = leaflet.latLngBounds([
     [i * TILE_DEGREES, j * TILE_DEGREES],
     [(i + 1) * TILE_DEGREES, (j + 1) * TILE_DEGREES],
   ]);
 
-  const pit = leaflet.rectangle(bounds) as leaflet.Layer;
+  const cache = leaflet.rectangle(bounds) as leaflet.Layer;
 
-  pit.bindPopup(createPopup(i, j));
-  pit.addTo(map);
+  cache.bindPopup(createPopup(i, j));
+  cache.addTo(map);
 }
