@@ -26,7 +26,6 @@ const shownCaches = new Map<
 >();
 
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!;
-statusPanel.innerHTML = "No coins yet...";
 
 let activePopup: HTMLDivElement;
 
@@ -61,11 +60,10 @@ spawnCaches(NULL_ISLAND);
 let curLat = 0;
 let curLng = 0;
 
-const sensorButton = document.querySelector("#sensor")!;
-sensorButton.addEventListener("click", toggleAutoUpdate);
-
 let updateIntervalId: number | undefined = 0;
 let startedTracking = false;
+const sensorButton = document.querySelector("#sensor")!;
+sensorButton.addEventListener("click", toggleAutoUpdate);
 function toggleAutoUpdate() {
   autoUpdatePosition = !autoUpdatePosition;
 
@@ -103,11 +101,37 @@ document.querySelector("#west")!.addEventListener("click", () => {
   moveTo(curLat, curLng - MOVE_STEP);
 });
 
+const resetButton = document.querySelector("#reset")!;
+resetButton.addEventListener("click", () => {
+  const confirmation = prompt(
+    "Are you sure you want to reset the game state? (yes/no)"
+  );
+
+  if (confirmation && confirmation.toLowerCase() === "yes") {
+    resetGameState();
+  }
+});
+
 loadGameData();
 
 ///////////////
 // FUNCTIONS //
 ///////////////
+
+function resetGameState() {
+  cacheData.clear();
+  inventory.length = 0;
+  updateStatusPanel();
+
+  updateMovementHistoryPolyline();
+
+  moveTo(NULL_ISLAND.lat, NULL_ISLAND.lng);
+  playerMovementHistory.length = 0;
+
+  alert("Game state has been reset. Have fun!");
+
+  saveGameData();
+}
 
 function moveTo(lat: number, long: number) {
   console.log("Moving to ", lat, ",", long, autoUpdatePosition);
@@ -164,7 +188,7 @@ function loadGameData() {
     const loadedInventory: Coin[] = JSON.parse(inventoryString) as Coin[];
     inventory.length = 0;
     inventory.push(...loadedInventory);
-    statusPanel.innerHTML = `${inventory.length} coins accumulated`;
+    updateStatusPanel();
   }
 }
 
@@ -184,6 +208,9 @@ function getCacheStorage(i: number, j: number) {
 }
 
 function handlePopupOpen(i: number, j: number, div: HTMLDivElement) {
+  if (activePopup == div) {
+    return;
+  }
   activePopup = div;
   const coins = getCacheStorage(i, j);
 
@@ -236,7 +263,6 @@ function createPopup(i: number, j: number) {
   popup.innerHTML = `
             <div>There is a cache here at "${i},${j}".
             It has <span id=value>999</span> coin<span id=plural></span> in it.</div>`;
-
   return popup;
 }
 
@@ -248,7 +274,6 @@ function createCacheCoinDiv(coin: Coin, i: number, j: number, coins: Coin[]) {
   const take = coinDiv.querySelector<HTMLButtonElement>("#Take")!;
   take.addEventListener("click", () => {
     takeCoinFromCache(coin, i, j);
-    updateCacheCountText(coins.length);
     coinDiv.style.display = "none";
     const invDiv = activePopup.querySelector<HTMLDivElement>("#Inventory");
     if (invDiv != null) {
@@ -266,7 +291,6 @@ function createInvCoinDiv(coin: Coin, i: number, j: number, coins: Coin[]) {
   const leave = coinDiv.querySelector<HTMLButtonElement>("#Leave")!;
   leave.addEventListener("click", () => {
     addCoinToCache(coin, i, j);
-    updateCacheCountText(coins.length);
     activePopup
       .querySelector<HTMLDivElement>("#cacheCoinsDiv")!
       .append(createCacheCoinDiv(coin, i, j, coins));
@@ -279,6 +303,7 @@ function addCoinToCache(coin: Coin, i: number, j: number) {
   const coins = getCacheStorage(i, j);
   coins.push(coin);
   inventory.splice(inventory.indexOf(coin), 1);
+  updateCacheCountText(coins.length);
   saveGameData();
 }
 
@@ -286,14 +311,21 @@ function takeCoinFromCache(coin: Coin, i: number, j: number) {
   const coins = getCacheStorage(i, j);
   inventory.push(coin);
   coins.splice(coins.indexOf(coin), 1);
+  updateCacheCountText(coins.length);
   saveGameData();
 }
 
 function updateCacheCountText(count: number) {
   activePopup.querySelector<HTMLSpanElement>("#value")!.innerHTML = `${count}`;
-  statusPanel.innerHTML = `${inventory.length} coins accumulated`;
+  updateStatusPanel();
   const pluralSpan = activePopup.querySelector<HTMLSpanElement>("#plural")!;
   pluralSpan.innerHTML = count !== 1 ? "s" : "";
+}
+
+function updateStatusPanel() {
+  statusPanel.innerHTML = `${inventory.length} coin${
+    inventory.length !== 1 ? "s" : ""
+  } accumulated`;
 }
 
 function clearOutOfRangeCaches(position: LatLng) {
