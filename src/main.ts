@@ -31,6 +31,8 @@ statusPanel.innerHTML = "No points yet...";
 let activePopup: HTMLDivElement;
 
 let autoUpdatePosition = false;
+const playerMovementHistory: LatLng[] = [];
+let movementHistoryPolyline: leaflet.Polyline | undefined;
 
 const mapContainer = document.querySelector<HTMLElement>("#map")!;
 
@@ -63,11 +65,16 @@ const sensorButton = document.querySelector("#sensor")!;
 sensorButton.addEventListener("click", toggleAutoUpdate);
 
 let updateIntervalId: number | undefined = 0;
+let startedTracking = false;
 function toggleAutoUpdate() {
   autoUpdatePosition = !autoUpdatePosition;
 
   if (autoUpdatePosition) {
     updatePosition(); // Update immediately when autoUpdatePosition is turned on
+    if (!startedTracking) {
+      playerMovementHistory.length = 0;
+      startedTracking = true;
+    }
     updateIntervalId = setInterval(updatePosition, 2000); // Update every 2 seconds
   } else {
     if (updateIntervalId !== undefined) {
@@ -102,12 +109,31 @@ document.querySelector("#west")!.addEventListener("click", () => {
 
 function moveTo(lat: number, long: number) {
   console.log("Moving to ", lat, ",", long, autoUpdatePosition);
-  playerMarker.setLatLng(leaflet.latLng(lat, long));
-  map.setView(playerMarker.getLatLng());
-  clearOutOfRangeCaches(leaflet.latLng(lat, long));
-  spawnCaches(leaflet.latLng(lat, long));
+  const newLatLng = leaflet.latLng(lat, long);
+  playerMarker.setLatLng(newLatLng);
+  map.setView(newLatLng);
+  clearOutOfRangeCaches(newLatLng);
+  spawnCaches(newLatLng);
   curLat = lat;
   curLng = long;
+
+  playerMovementHistory.push(newLatLng);
+
+  updateMovementHistoryPolyline();
+}
+
+function updateMovementHistoryPolyline() {
+  if (movementHistoryPolyline) {
+    movementHistoryPolyline.remove();
+  }
+
+  movementHistoryPolyline = leaflet.polyline(playerMovementHistory, {
+    color: "blue",
+    weight: 3,
+    opacity: 0.7,
+  });
+
+  movementHistoryPolyline.addTo(map);
 }
 
 function getCacheStorage(i: number, j: number) {
