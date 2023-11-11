@@ -26,7 +26,7 @@ const shownCaches = new Map<
 >();
 
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!;
-statusPanel.innerHTML = "No points yet...";
+statusPanel.innerHTML = "No coins yet...";
 
 let activePopup: HTMLDivElement;
 
@@ -103,6 +103,8 @@ document.querySelector("#west")!.addEventListener("click", () => {
   moveTo(curLat, curLng - MOVE_STEP);
 });
 
+loadGameData();
+
 ///////////////
 // FUNCTIONS //
 ///////////////
@@ -136,20 +138,48 @@ function updateMovementHistoryPolyline() {
   movementHistoryPolyline.addTo(map);
 }
 
+function saveGameData() {
+  localStorage.setItem(
+    "cacheData",
+    JSON.stringify(Array.from(cacheData.entries()))
+  );
+  localStorage.setItem("inventory", JSON.stringify(inventory));
+}
+
+function loadGameData() {
+  const cachedDataString = localStorage.getItem("cacheData");
+  const inventoryString = localStorage.getItem("inventory");
+
+  if (cachedDataString) {
+    const cachedDataArray: [string, Coin[]][] = JSON.parse(
+      cachedDataString
+    ) as [string, Coin[]][];
+    cacheData.clear();
+    cachedDataArray.forEach(([key, value]) => {
+      cacheData.set(key, value);
+    });
+  }
+
+  if (inventoryString) {
+    const loadedInventory: Coin[] = JSON.parse(inventoryString) as Coin[];
+    inventory.length = 0;
+    inventory.push(...loadedInventory);
+    statusPanel.innerHTML = `${inventory.length} coins accumulated`;
+  }
+}
+
 function getCacheStorage(i: number, j: number) {
   const cacheKey = `${i},${j}`;
   if (!cacheData.has(cacheKey)) {
     // If the cache value is not in the lookup table, calculate and store it
     const coins = [];
     const numCoins = Math.floor(luck([cacheKey].toString()) * COIN_RATE_MOD);
-    console.log("------generating ", numCoins, " coins");
     for (let index = 0; index < numCoins; index++) {
       coins.push(new Coin(i, j, index));
     }
     cacheData.set(cacheKey, coins);
     return coins;
   }
-  console.log("------cacheData found with ", cacheData.get(cacheKey)!.length);
   return cacheData.get(cacheKey)!;
 }
 
@@ -249,17 +279,19 @@ function addCoinToCache(coin: Coin, i: number, j: number) {
   const coins = getCacheStorage(i, j);
   coins.push(coin);
   inventory.splice(inventory.indexOf(coin), 1);
+  saveGameData();
 }
 
 function takeCoinFromCache(coin: Coin, i: number, j: number) {
   const coins = getCacheStorage(i, j);
   inventory.push(coin);
   coins.splice(coins.indexOf(coin), 1);
+  saveGameData();
 }
 
 function updateCacheCountText(count: number) {
   activePopup.querySelector<HTMLSpanElement>("#value")!.innerHTML = `${count}`;
-  statusPanel.innerHTML = `${inventory.length} points accumulated`;
+  statusPanel.innerHTML = `${inventory.length} coins accumulated`;
   const pluralSpan = activePopup.querySelector<HTMLSpanElement>("#plural")!;
   pluralSpan.innerHTML = count !== 1 ? "s" : "";
 }
