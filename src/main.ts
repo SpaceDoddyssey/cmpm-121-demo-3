@@ -14,14 +14,7 @@ const COIN_RATE_MOD = 100;
 const MOVE_STEP = 0.0001;
 
 class Coin {
-  public i: number;
-  public j: number;
-  public index: number;
-  constructor(i: number, j: number, index: number) {
-    this.i = i;
-    this.j = j;
-    this.index = index;
-  }
+  constructor(public i: number, public j: number, public index: number) {}
 }
 
 const inventory: Coin[] = [];
@@ -34,6 +27,8 @@ const shownCaches = new Map<
 
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!;
 statusPanel.innerHTML = "No points yet...";
+
+let activePopup: HTMLDivElement;
 
 const mapContainer = document.querySelector<HTMLElement>("#map")!;
 
@@ -96,7 +91,6 @@ function moveTo(lat: number, long: number) {
 }
 
 function getCacheStorage(i: number, j: number) {
-  console.log("Getting cache storage for ", i, ",", j);
   const cacheKey = `${i},${j}`;
   if (!cacheData.has(cacheKey)) {
     // If the cache value is not in the lookup table, calculate and store it
@@ -113,29 +107,25 @@ function getCacheStorage(i: number, j: number) {
   return cacheData.get(cacheKey)!;
 }
 
-function createPopup(i: number, j: number) {
+function handlePopupOpen(i: number, j: number, div: HTMLDivElement) {
+  activePopup = div;
   const coins = getCacheStorage(i, j);
-  const container = document.createElement("div");
-  const plural = coins.length != 1 ? "s" : "";
-  container.innerHTML = `
-            <div>There is a cache here at "${i},${j}".
-            It has <span id="value">${coins.length}</span> coin${plural} in it.</div>`;
 
   const cacheCoinsDiv = document.createElement("div");
   cacheCoinsDiv.prepend(document.createElement("div"));
 
   cacheCoinsDiv.id = "cacheCoinsDiv";
   for (const coin of coins) {
-    const coinDiv = createCacheCoinDiv(coin, i, j, container, coins);
+    const coinDiv = createCacheCoinDiv(coin, i, j, coins);
     cacheCoinsDiv.append(coinDiv);
   }
-  container.append(cacheCoinsDiv);
+  activePopup.append(cacheCoinsDiv);
 
   const showInvButtonDiv = document.createElement("div");
   showInvButtonDiv.innerHTML = `<button id="InventoryButton">Show my inventory</button>`;
   const showInvButton =
     showInvButtonDiv.querySelector<HTMLButtonElement>("#InventoryButton")!;
-  container.append(showInvButtonDiv);
+  activePopup.append(showInvButtonDiv);
 
   let inventoryMade = false;
   let inventoryShowing = false;
@@ -147,34 +137,34 @@ function createPopup(i: number, j: number) {
       inventoryShowing = true;
       inventoryDiv.innerHTML = `Coin Inventory:`;
       for (const coin of inventory) {
-        const coinDiv = createInvCoinDiv(coin, i, j, container, coins);
+        const coinDiv = createInvCoinDiv(coin, i, j, coins);
         inventoryDiv.append(coinDiv);
       }
       showInvButtonDiv.append(inventoryDiv);
       showInvButton.innerHTML = `Hide inventory`;
       return;
     }
-    if (inventoryShowing) {
-      inventoryShowing = false;
-      inventoryDiv.classList.add("hidden");
-      showInvButton.innerHTML = `Show my inventory`;
-    } else {
-      inventoryShowing = true;
-      inventoryDiv.classList.remove("hidden");
-      showInvButton.innerHTML = `Hide inventory`;
-    }
+    inventoryShowing = !inventoryShowing;
+    inventoryDiv.classList.toggle("hidden", !inventoryShowing);
+    showInvButton.innerHTML = inventoryShowing
+      ? "Hide inventory"
+      : "Show my inventory";
   });
 
-  return container;
+  updateCacheCountText(coins.length);
+  return;
 }
 
-function createCacheCoinDiv(
-  coin: Coin,
-  i: number,
-  j: number,
-  container: HTMLDivElement,
-  coins: Coin[]
-) {
+function createPopup(i: number, j: number) {
+  const popup = document.createElement("div");
+  popup.innerHTML = `
+            <div>There is a cache here at "${i},${j}".
+            It has <span id=value>999</span> coin<span id=plural></span> in it.</div>`;
+
+  return popup;
+}
+
+function createCacheCoinDiv(coin: Coin, i: number, j: number, coins: Coin[]) {
   const coinDiv = document.createElement("div");
   coinDiv.innerHTML = `
     Coin:${coin.i},${coin.j},${coin.index}
@@ -182,26 +172,17 @@ function createCacheCoinDiv(
   const take = coinDiv.querySelector<HTMLButtonElement>("#Take")!;
   take.addEventListener("click", () => {
     takeCoinFromCache(coin, i, j);
-    container.querySelector<HTMLSpanElement>(
-      "#value"
-    )!.innerHTML = `${coins.length}`;
-    statusPanel.innerHTML = `${inventory.length} points accumulated`;
+    updateCacheCountText(coins.length);
     coinDiv.style.display = "none";
-    const invDiv = container.querySelector<HTMLDivElement>("#Inventory");
+    const invDiv = activePopup.querySelector<HTMLDivElement>("#Inventory");
     if (invDiv != null) {
-      invDiv.append(createInvCoinDiv(coin, i, j, container, coins));
+      invDiv.append(createInvCoinDiv(coin, i, j, coins));
     }
   });
   return coinDiv;
 }
 
-function createInvCoinDiv(
-  coin: Coin,
-  i: number,
-  j: number,
-  container: HTMLDivElement,
-  coins: Coin[]
-) {
+function createInvCoinDiv(coin: Coin, i: number, j: number, coins: Coin[]) {
   const coinDiv = document.createElement("div");
   coinDiv.innerHTML = `
     Coin:${coin.i},${coin.j},${coin.index}
@@ -209,13 +190,10 @@ function createInvCoinDiv(
   const leave = coinDiv.querySelector<HTMLButtonElement>("#Leave")!;
   leave.addEventListener("click", () => {
     addCoinToCache(coin, i, j);
-    container.querySelector<HTMLSpanElement>(
-      "#value"
-    )!.innerHTML = `${coins.length}`;
-    statusPanel.innerHTML = `${inventory.length} points accumulated`;
-    container
+    updateCacheCountText(coins.length);
+    activePopup
       .querySelector<HTMLDivElement>("#cacheCoinsDiv")!
-      .append(createCacheCoinDiv(coin, i, j, container, coins));
+      .append(createCacheCoinDiv(coin, i, j, coins));
     coinDiv.style.display = "none";
   });
   return coinDiv;
@@ -223,33 +201,32 @@ function createInvCoinDiv(
 
 function addCoinToCache(coin: Coin, i: number, j: number) {
   const coins = getCacheStorage(i, j);
-  console.log("adding to ", coins);
   coins.push(coin);
   inventory.splice(inventory.indexOf(coin), 1);
 }
 
 function takeCoinFromCache(coin: Coin, i: number, j: number) {
   const coins = getCacheStorage(i, j);
-  console.log("taking from ", coins);
   inventory.push(coin);
   coins.splice(coins.indexOf(coin), 1);
-  console.log("Coins after:", coins);
+}
+
+function updateCacheCountText(count: number) {
+  activePopup.querySelector<HTMLSpanElement>("#value")!.innerHTML = `${count}`;
+  statusPanel.innerHTML = `${inventory.length} points accumulated`;
+  const pluralSpan = activePopup.querySelector<HTMLSpanElement>("#plural")!;
+  pluralSpan.innerHTML = count !== 1 ? "s" : "";
 }
 
 function clearOutOfRangeCaches(position: LatLng) {
-  const latitude = position.lat;
-  const longitude = position.lng;
-
-  const i = Math.floor(latitude / TILE_DEGREES);
-  const j = Math.floor(longitude / TILE_DEGREES);
+  const i = Math.floor(position.lat / TILE_DEGREES);
+  const j = Math.floor(position.lng / TILE_DEGREES);
 
   const keysToRemove: string[] = [];
   for (const [key, value] of shownCaches) {
     if (
-      value.i < i - NEIGHBORHOOD_SIZE ||
-      value.i > i + NEIGHBORHOOD_SIZE ||
-      value.j < j - NEIGHBORHOOD_SIZE ||
-      value.j > j + NEIGHBORHOOD_SIZE
+      Math.abs(value.i - i) > NEIGHBORHOOD_SIZE ||
+      Math.abs(value.j - j) > NEIGHBORHOOD_SIZE
     ) {
       value.rect.remove();
       keysToRemove.push(key);
@@ -257,17 +234,13 @@ function clearOutOfRangeCaches(position: LatLng) {
   }
 
   for (const key of keysToRemove) {
-    console.log("Deleting ", key);
     shownCaches.delete(key);
   }
 }
 
 function spawnCaches(position: LatLng) {
-  const latitude = position.lat;
-  const longitude = position.lng;
-
-  const i = Math.floor(latitude / TILE_DEGREES);
-  const j = Math.floor(longitude / TILE_DEGREES);
+  const i = Math.floor(position.lat / TILE_DEGREES);
+  const j = Math.floor(position.lng / TILE_DEGREES);
 
   for (let deltaI = -NEIGHBORHOOD_SIZE; deltaI < NEIGHBORHOOD_SIZE; deltaI++) {
     for (
@@ -291,8 +264,6 @@ function makeCache(i: number, j: number) {
     return;
   }
 
-  console.log("Creating ", cacheKey);
-
   const bounds = leaflet.latLngBounds([
     [i * TILE_DEGREES, j * TILE_DEGREES],
     [(i + 1) * TILE_DEGREES, (j + 1) * TILE_DEGREES],
@@ -300,7 +271,11 @@ function makeCache(i: number, j: number) {
 
   const cacheRect = leaflet.rectangle(bounds) as leaflet.Layer;
 
-  cacheRect.bindPopup(createPopup(i, j));
+  const div = createPopup(i, j);
+  cacheRect.bindPopup(div);
+  cacheRect.on("popupopen", () => {
+    handlePopupOpen(i, j, div);
+  });
   shownCaches.set(cacheKey, { rect: cacheRect, i, j });
 
   cacheRect.addTo(map);
