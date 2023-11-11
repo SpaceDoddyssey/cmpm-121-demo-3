@@ -30,6 +30,8 @@ statusPanel.innerHTML = "No points yet...";
 
 let activePopup: HTMLDivElement;
 
+let autoUpdatePosition = false;
+
 const mapContainer = document.querySelector<HTMLElement>("#map")!;
 
 const map = leaflet.map(mapContainer, {
@@ -58,11 +60,28 @@ let curLat = 0;
 let curLng = 0;
 
 const sensorButton = document.querySelector("#sensor")!;
-sensorButton.addEventListener("click", () => {
-  navigator.geolocation.watchPosition((position) => {
+sensorButton.addEventListener("click", toggleAutoUpdate);
+
+let updateIntervalId: number | undefined = 0;
+function toggleAutoUpdate() {
+  autoUpdatePosition = !autoUpdatePosition;
+
+  if (autoUpdatePosition) {
+    updatePosition(); // Update immediately when autoUpdatePosition is turned on
+    updateIntervalId = setInterval(updatePosition, 2000); // Update every 2 seconds
+  } else {
+    if (updateIntervalId !== undefined) {
+      clearInterval(updateIntervalId);
+      updateIntervalId = undefined;
+    }
+  }
+}
+
+function updatePosition() {
+  navigator.geolocation.getCurrentPosition((position) => {
     moveTo(position.coords.latitude, position.coords.longitude);
   });
-});
+}
 
 document.querySelector("#north")!.addEventListener("click", () => {
   moveTo(curLat + MOVE_STEP, curLng);
@@ -82,6 +101,7 @@ document.querySelector("#west")!.addEventListener("click", () => {
 ///////////////
 
 function moveTo(lat: number, long: number) {
+  console.log("Moving to ", lat, ",", long, autoUpdatePosition);
   playerMarker.setLatLng(leaflet.latLng(lat, long));
   map.setView(playerMarker.getLatLng());
   clearOutOfRangeCaches(leaflet.latLng(lat, long));
