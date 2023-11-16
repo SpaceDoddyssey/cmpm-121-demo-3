@@ -212,6 +212,8 @@ function handlePopupOpen(i: number, j: number, div: HTMLDivElement) {
     return;
   }
   activePopup = div;
+  activePopup.innerHTML = `<div>There is a cache here at "${i},${j}".
+  It has <span id=value>999</span> coin<span id=plural></span> in it.</div>`;
   const coins = getCacheStorage(i, j);
 
   const cacheCoinsDiv = document.createElement("div");
@@ -270,8 +272,13 @@ function createCacheCoinDiv(coin: Coin, i: number, j: number, coins: Coin[]) {
   const coinDiv = document.createElement("div");
   coinDiv.innerHTML = `
     Coin:${coin.i},${coin.j},${coin.index}
-    <button id="Take">Take coin</button>`;
+    <button id="Take">Take coin</button>
+    <button id="MoveToButton">📍 Origin</button>`; // Added button for moving to location
+
   const take = coinDiv.querySelector<HTMLButtonElement>("#Take")!;
+  const moveToButton =
+    coinDiv.querySelector<HTMLButtonElement>("#MoveToButton")!; // Added reference for the move button
+
   take.addEventListener("click", () => {
     takeCoinFromCache(coin, i, j);
     coinDiv.style.display = "none";
@@ -280,15 +287,26 @@ function createCacheCoinDiv(coin: Coin, i: number, j: number, coins: Coin[]) {
       invDiv.append(createInvCoinDiv(coin, i, j, coins));
     }
   });
+
+  moveToButton.addEventListener("click", () => {
+    moveCamera(coin.i, coin.j); // Call the function to move to the location
+  });
+
   return coinDiv;
 }
 
+// Add the following code inside the createInvCoinDiv function
 function createInvCoinDiv(coin: Coin, i: number, j: number, coins: Coin[]) {
   const coinDiv = document.createElement("div");
   coinDiv.innerHTML = `
     Coin:${coin.i},${coin.j},${coin.index}
-    <button id="Leave">Leave coin</button>`;
+    <button id="Leave">Leave coin</button>
+    <button id="MoveToButton">📍 Origin</button>`; // Added button for moving to location
+
   const leave = coinDiv.querySelector<HTMLButtonElement>("#Leave")!;
+  const moveToButton =
+    coinDiv.querySelector<HTMLButtonElement>("#MoveToButton")!; // Added reference for the move button
+
   leave.addEventListener("click", () => {
     addCoinToCache(coin, i, j);
     activePopup
@@ -296,7 +314,18 @@ function createInvCoinDiv(coin: Coin, i: number, j: number, coins: Coin[]) {
       .append(createCacheCoinDiv(coin, i, j, coins));
     coinDiv.style.display = "none";
   });
+
+  moveToButton.addEventListener("click", () => {
+    moveCamera(coin.i, coin.j); // Call the function to move to the location
+  });
+
   return coinDiv;
+}
+
+function moveCamera(i: number, j: number) {
+  const targetLatLng = leaflet.latLng(i * TILE_DEGREES, j * TILE_DEGREES);
+  console.log("moving to ", i, j, targetLatLng);
+  map.setView(targetLatLng);
 }
 
 function addCoinToCache(coin: Coin, i: number, j: number) {
