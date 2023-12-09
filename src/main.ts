@@ -14,15 +14,39 @@ const COIN_RATE_MOD = 100;
 const MOVE_STEP = 0.0001;
 
 class Coin {
-  constructor(public i: number, public j: number, public index: number) {}
+  constructor(public origin: Location, public index: number) {}
 }
 
-const inventory: Coin[] = [];
+interface Location {
+  i: number;
+  j: number;
+}
+
 const cacheData = new Map<string, Coin[]>();
+const inventory: Coin[] = [];
+
+function getCacheStorage(loc: Location) {
+  const cacheKey = `${loc.i},${loc.j}`;
+  console.log("Getting cache", loc, cacheKey);
+  console.log(cacheData);
+  if (!cacheData.has(cacheKey)) {
+    // If the cache value is not in the lookup table, calculate and store it
+    const coins = [];
+    const numCoins = Math.floor(luck([cacheKey].toString()) * COIN_RATE_MOD);
+    console.log("Making cache", loc, numCoins);
+    for (let index = 0; index < numCoins; index++) {
+      console.log("Making coin", loc, index);
+      coins.push(new Coin(loc, index));
+    }
+    cacheData.set(cacheKey, coins);
+    return coins;
+  }
+  return cacheData.get(cacheKey)!;
+}
 
 const shownCaches = new Map<
   string,
-  { rect: leaflet.Layer; i: number; j: number }
+  { rect: leaflet.Layer; cellLoc: Location }
 >();
 
 const statusPanel = document.querySelector<HTMLDivElement>("#statusPanel")!;
@@ -192,36 +216,21 @@ function loadGameData() {
   }
 }
 
-function getCacheStorage(i: number, j: number) {
-  const cacheKey = `${i},${j}`;
-  if (!cacheData.has(cacheKey)) {
-    // If the cache value is not in the lookup table, calculate and store it
-    const coins = [];
-    const numCoins = Math.floor(luck([cacheKey].toString()) * COIN_RATE_MOD);
-    for (let index = 0; index < numCoins; index++) {
-      coins.push(new Coin(i, j, index));
-    }
-    cacheData.set(cacheKey, coins);
-    return coins;
-  }
-  return cacheData.get(cacheKey)!;
-}
-
-function handlePopupOpen(i: number, j: number, div: HTMLDivElement) {
+function handlePopupOpen(cellLoc: Location, div: HTMLDivElement) {
   if (activePopup == div) {
     return;
   }
   activePopup = div;
-  activePopup.innerHTML = `<div>There is a cache here at "${i},${j}".
+  activePopup.innerHTML = `<div>There is a cache here at "${cellLoc.i},${cellLoc.j}".
   It has <span id=value>999</span> coin<span id=plural></span> in it.</div>`;
-  const coins = getCacheStorage(i, j);
+  const coins = getCacheStorage(cellLoc);
 
   const cacheCoinsDiv = document.createElement("div");
   cacheCoinsDiv.prepend(document.createElement("div"));
 
   cacheCoinsDiv.id = "cacheCoinsDiv";
   for (const coin of coins) {
-    const coinDiv = createCacheCoinDiv(coin, i, j, coins);
+    const coinDiv = createCacheCoinDiv(coin, cellLoc, coins);
     cacheCoinsDiv.append(coinDiv);
   }
   activePopup.append(cacheCoinsDiv);
@@ -242,7 +251,7 @@ function handlePopupOpen(i: number, j: number, div: HTMLDivElement) {
       inventoryShowing = true;
       inventoryDiv.innerHTML = `Coin Inventory:`;
       for (const coin of inventory) {
-        const coinDiv = createInvCoinDiv(coin, i, j, coins);
+        const coinDiv = createInvCoinDiv(coin, cellLoc, coins);
         inventoryDiv.append(coinDiv);
       }
       showInvButtonDiv.append(inventoryDiv);
@@ -260,18 +269,19 @@ function handlePopupOpen(i: number, j: number, div: HTMLDivElement) {
   return;
 }
 
-function createPopup(i: number, j: number) {
+function createPopup(cellLoc: Location) {
   const popup = document.createElement("div");
   popup.innerHTML = `
-            <div>There is a cache here at "${i},${j}".
+            <div>There is a cache here at "${cellLoc.i},${cellLoc.j}".
             It has <span id=value>999</span> coin<span id=plural></span> in it.</div>`;
   return popup;
 }
 
-function createCacheCoinDiv(coin: Coin, i: number, j: number, coins: Coin[]) {
+function createCacheCoinDiv(coin: Coin, cellLoc: Location, coins: Coin[]) {
   const coinDiv = document.createElement("div");
+  console.log(coin.origin, cellLoc);
   coinDiv.innerHTML = `
-    Coin:${coin.i},${coin.j},${coin.index}
+    Coin:${coin.origin.i},${coin.origin.j},${coin.index}
     <button id="Take">Take coin</button>
     <button id="MoveToButton">📍 Origin</button>`; // Added button for moving to location
 
@@ -280,64 +290,65 @@ function createCacheCoinDiv(coin: Coin, i: number, j: number, coins: Coin[]) {
     coinDiv.querySelector<HTMLButtonElement>("#MoveToButton")!; // Added reference for the move button
 
   take.addEventListener("click", () => {
-    takeCoinFromCache(coin, i, j);
+    takeCoinFromCache(coin, cellLoc);
     coinDiv.style.display = "none";
     const invDiv = activePopup.querySelector<HTMLDivElement>("#Inventory");
     if (invDiv != null) {
-      invDiv.append(createInvCoinDiv(coin, i, j, coins));
+      invDiv.append(createInvCoinDiv(coin, cellLoc, coins));
     }
   });
 
   moveToButton.addEventListener("click", () => {
-    moveCamera(coin.i, coin.j); // Call the function to move to the location
+    moveCamera(coin.origin);
   });
 
   return coinDiv;
 }
 
-// Add the following code inside the createInvCoinDiv function
-function createInvCoinDiv(coin: Coin, i: number, j: number, coins: Coin[]) {
+function createInvCoinDiv(coin: Coin, cellLoc: Location, coins: Coin[]) {
   const coinDiv = document.createElement("div");
   coinDiv.innerHTML = `
-    Coin:${coin.i},${coin.j},${coin.index}
+    Coin:${coin.origin.i},${coin.origin.j},${coin.index}
     <button id="Leave">Leave coin</button>
-    <button id="MoveToButton">📍 Origin</button>`; // Added button for moving to location
+    <button id="MoveToButton">📍 Origin</button>`;
 
   const leave = coinDiv.querySelector<HTMLButtonElement>("#Leave")!;
   const moveToButton =
-    coinDiv.querySelector<HTMLButtonElement>("#MoveToButton")!; // Added reference for the move button
+    coinDiv.querySelector<HTMLButtonElement>("#MoveToButton")!;
 
   leave.addEventListener("click", () => {
-    addCoinToCache(coin, i, j);
+    addCoinToCache(coin, cellLoc);
     activePopup
       .querySelector<HTMLDivElement>("#cacheCoinsDiv")!
-      .append(createCacheCoinDiv(coin, i, j, coins));
+      .append(createCacheCoinDiv(coin, coin.origin, coins));
     coinDiv.style.display = "none";
   });
 
   moveToButton.addEventListener("click", () => {
-    moveCamera(coin.i, coin.j); // Call the function to move to the location
+    moveCamera(coin.origin);
   });
 
   return coinDiv;
 }
 
-function moveCamera(i: number, j: number) {
-  const targetLatLng = leaflet.latLng(i * TILE_DEGREES, j * TILE_DEGREES);
-  console.log("moving to ", i, j, targetLatLng);
+function moveCamera(cellLoc: Location) {
+  const targetLatLng = leaflet.latLng(
+    cellLoc.i * TILE_DEGREES,
+    cellLoc.j * TILE_DEGREES
+  );
   map.setView(targetLatLng);
 }
 
-function addCoinToCache(coin: Coin, i: number, j: number) {
-  const coins = getCacheStorage(i, j);
+function addCoinToCache(coin: Coin, cellLoc: Location) {
+  const coins = getCacheStorage(cellLoc);
   coins.push(coin);
   inventory.splice(inventory.indexOf(coin), 1);
   updateCacheCountText(coins.length);
   saveGameData();
 }
 
-function takeCoinFromCache(coin: Coin, i: number, j: number) {
-  const coins = getCacheStorage(i, j);
+function takeCoinFromCache(coin: Coin, cellLoc: Location) {
+  const coins = getCacheStorage(cellLoc);
   inventory.push(coin);
   coins.splice(coins.indexOf(coin), 1);
   updateCacheCountText(coins.length);
@@ -364,8 +375,8 @@ function clearOutOfRangeCaches(position: LatLng) {
   const keysToRemove: string[] = [];
   for (const [key, value] of shownCaches) {
     if (
-      Math.abs(value.i - i) > NEIGHBORHOOD_SIZE ||
-      Math.abs(value.j - j) > NEIGHBORHOOD_SIZE
+      Math.abs(value.cellLoc.i - i) > NEIGHBORHOOD_SIZE ||
+      Math.abs(value.cellLoc.j - j) > NEIGHBORHOOD_SIZE
     ) {
       value.rect.remove();
       keysToRemove.push(key);
@@ -387,22 +398,23 @@ function spawnCaches(position: LatLng) {
       deltaJ < NEIGHBORHOOD_SIZE;
       deltaJ++
     ) {
-      const newI = i + deltaI;
-      const newJ = j + deltaJ;
+      const newLoc = { i: i + deltaI, j: j + deltaJ };
 
-      if (luck([newI, newJ].toString()) < CACHE_SPAWN_PROBABILITY) {
-        makeCache(newI, newJ);
+      if (luck([newLoc.i, newLoc.j].toString()) < CACHE_SPAWN_PROBABILITY) {
+        makeCache(newLoc);
       }
     }
   }
 }
 
-function makeCache(i: number, j: number) {
-  const cacheKey = `${i},${j}`;
+function makeCache(cellLoc: Location) {
+  const cacheKey = `${cellLoc.i},${cellLoc.j}`;
   if (shownCaches.has(cacheKey)) {
     return;
   }
 
+  const i = cellLoc.i;
+  const j = cellLoc.j;
   const bounds = leaflet.latLngBounds([
     [i * TILE_DEGREES, j * TILE_DEGREES],
     [(i + 1) * TILE_DEGREES, (j + 1) * TILE_DEGREES],
@@ -410,12 +422,12 @@ function makeCache(i: number, j: number) {
 
   const cacheRect = leaflet.rectangle(bounds) as leaflet.Layer;
 
-  const div = createPopup(i, j);
+  const div = createPopup(cellLoc);
   cacheRect.bindPopup(div);
   cacheRect.on("popupopen", () => {
-    handlePopupOpen(i, j, div);
+    handlePopupOpen(cellLoc, div);
   });
-  shownCaches.set(cacheKey, { rect: cacheRect, i, j });
+  shownCaches.set(cacheKey, { rect: cacheRect, cellLoc });
 
   cacheRect.addTo(map);
 }
